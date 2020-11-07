@@ -1,0 +1,51 @@
+---
+title: "Regression"
+output:
+  html_notebook: default
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+```{r "loading data", echo=F}
+library(ggplot2)
+library(ggsci)
+library(wesanderson)
+library(ggpubr)
+
+library(dplyr)
+library(reshape2)
+
+library(formattable)
+
+library(openxlsx)
+source("../run/tools.R")
+
+data_path <- "../data/output/"
+files_to_comp <- c("regression_restricted.csv", "regression_full_0.csv", "regression_full_1.csv")
+names_files <- c("restricted", "full", "full and higher-level")
+
+all_data <- data.frame()
+for (i in 1:length(files_to_comp)){
+  data <- read.csv(paste0(data_path, files_to_comp[i]), row.names = 1, stringsAsFactors = F)
+  data$model_type <- names_files[i]
+  all_data <- rbind.data.frame(all_data, data)
+}
+```
+
+Boxplot of Test R2 for all experiments
+
+```{r}
+g1 <- ggplot(all_data, aes(y=r_squared_test, fill=reorder(model_type, r_squared_test, mean))) +
+  geom_boxplot()+
+  facet_wrap(~cancer_type, nrow = 2) +
+  scale_fill_jco() + 
+  xlab("")+
+  ylab("Test R-squared")+
+  labs(fill = "Model type")+
+  theme_light_custom()
+g1
+
+# ggsave(filename = "Fig_regression_r2.tiff", plot = g1, device = "tiff", path = "../../cancer_breakpoints_hotspots_wide/paper_third/", dpi = 600, units = "in", width = 5, height = 3, scale = 2, compression = "lzw")
+```
+
