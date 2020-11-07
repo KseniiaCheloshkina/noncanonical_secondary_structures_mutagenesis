@@ -1,0 +1,242 @@
+---
+title: "Regression"
+output:
+  html_notebook: default
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+```{r "loading data", echo=F}
+library(ggplot2)
+library(ggsci)
+library(wesanderson)
+library(ggpubr)
+
+library(dplyr)
+library(reshape2)
+
+library(formattable)
+
+library(openxlsx)
+source("../tools.R")
+
+data_path <- "../../data/output/"
+folders_to_comp <- c("classification_restricted/", "classification_full/", "classification_full_higher_lev/")
+names_files <- c("restricted", "full", "full and higher-level")
+
+# roc auc
+templ_nm <- "result_roc_auc.csv"
+roc_data <- data.frame()
+for (i in 1:length(folders_to_comp)){
+  data <- read.csv(paste0(data_path, folders_to_comp[i], templ_nm), row.names = 1, stringsAsFactors = F)
+  data$model_type <- names_files[i]
+  roc_data <- rbind.data.frame(roc_data, data)
+}
+
+# recall
+templ_nm <- "result_recall.csv"
+recall_data <- data.frame()
+for (i in 1:length(folders_to_comp)){
+  data <- read.csv(paste0(data_path, folders_to_comp[i], templ_nm), row.names = 1, stringsAsFactors = F)
+  data$model_type <- names_files[i]
+  recall_data <- rbind.data.frame(recall_data, data)
+}
+
+```
+
+Plot all metrics
+
+```{r}
+
+pl_values <- rbind.data.frame(
+  roc_data %>%
+    select(cancer_type, model_type, te_auc) %>%
+    setNames(c("cancer_type", "model_type", "value")) %>%
+    mutate(
+      metric = "ROC AUC"
+    ),
+    recall_data %>% 
+      filter(quantile == "0.03") %>%
+      select(cancer_type, model_type, lift_recall) %>%
+      setNames(c("cancer_type", "model_type", "value")) %>%
+      mutate(
+        metric = "Lift of recall"
+      )
+  )
+
+
+pl_values <- rbind.data.frame(
+  pl_values,
+  roc_data %>%
+    select(cancer_type, model_type,  pr_auc) %>%
+    setNames(c("cancer_type", "model_type", "value")) %>%
+    mutate(
+      metric = "PR AUC"
+    )
+)
+
+agg <- pl_values %>%
+  group_by(metric, cancer_type, model_type) %>%
+  summarize(
+    med_val = median(value),
+    q75_val = quantile(value, 0.75)
+    ) %>%
+  arrange(model_type, metric, cancer_type, med_val, q75_val) %>%
+  mutate(
+    r = row_number()
+  )
+
+pl_values <- pl_values %>%
+  inner_join(
+    agg %>% 
+      select(metric, cancer_type, model_type, r), 
+    by=c("metric", "cancer_type", "model_type"))
+
+
+pl_values$model_type <- factor(pl_values$model_type,levels=c("restricted", "full", "full and higher-level"))
+
+g2 <- ggplot(pl_values, aes(y=value, fill=model_type)) + 
+  geom_boxplot() +
+  facet_grid(metric~cancer_type, scales="free")+
+  theme_light()+
+  xlab("Model type")+
+  ylab("Metric value") +
+  labs(fill = "Model type")+
+  theme(
+    axis.title.x=element_blank(),
+    axis.text.x=element_blank(),
+    axis.ticks.x=element_blank(),
+    text = element_text(size = 9, family = "sans"),
+    axis.title.y = element_text(size = 10),
+    axis.text.y = element_text(hjust = 1),
+    legend.position="bottom", legend.title = element_text(size = 10),    
+    ) +
+  scale_fill_jco()
+g2
+# ggsave(filename = "Fig_classification_r2.tiff", plot = g2, device = "tiff", path = "../../../cancer_breakpoints_hotspots_wide/paper_third/", dpi = 600, units = "in", width = 5, height = 3, scale = 2, compression = "lzw")
+```
+
+
+```{r}
+library(ggpubr)
+g_f <- ggarrange(g1, g2,  
+          labels = c("A", "B"),
+          ncol = 1, nrow = 2, heights = c(2, 5),
+          font.label = list(size = 10, color = "black", face ="bold"))
+g_f
+# ggsave(filename = "Fig_benchmark.tiff", plot = g_f, device = "tiff", path = "../../../cancer_breakpoints_hotspots_wide/paper_third/", dpi = 600, units = "in", width = 7, height = 7, scale = 2, compression = "lzw")
+```
+
+Save table
+
+```{r echo=F}
+# roc auc
+roc_data <- roc_data %>%
+  mutate(
+    train_test_diff = tr_auc - te_auc
+  ) %>%
+  group_by(cancer_type, model_type) %>%
+  summarize(
+    min_test_auc = min(te_auc),
+    sd_test_auc = sd(te_auc),
+    median_test_auc = median(te_auc),
+    mean_test_auc = mean(te_auc),
+    train_test_diff = mean(train_test_diff),
+    n_ex = n(),
+    mean_pr_auc = mean(pr_auc),
+    sd_pr_auc = sd(pr_auc),
+    mean_efron_r2 = mean(efron_r2),
+    sd_efron_r2 = sd(efron_r2)
+  ) %>%
+  mutate(
+    ci_lower_roc_auc = mean_test_auc - 1.96 * sd_test_auc / sqrt(n_ex),
+    ci_upper_roc_auc = mean_test_auc + 1.96 * sd_test_auc / sqrt(n_ex), 
+    ci_lower_pr_auc = mean_pr_auc - 1.96 * sd_pr_auc / sqrt(n_ex),
+    ci_upper_pr_auc = mean_pr_auc + 1.96 * sd_pr_auc / sqrt(n_ex),
+    ci_lower_r2 = mean_efron_r2 - 1.96 * sd_efron_r2 / sqrt(n_ex),
+    ci_upper_r2 = mean_efron_r2 + 1.96 * sd_efron_r2 / sqrt(n_ex), 
+  ) %>%
+  select(-c("n_ex", "sd_efron_r2", "sd_pr_auc"))
+
+
+roc_data <- roc_data %>%
+  select("cancer_type", "model_type", 
+         "min_test_auc", "sd_test_auc", "median_test_auc", "mean_test_auc", "train_test_diff",
+         "ci_lower_roc_auc", "ci_upper_roc_auc", "mean_pr_auc", "ci_lower_pr_auc", "ci_upper_pr_auc",
+         "mean_efron_r2", "ci_lower_r2", "ci_upper_r2"
+         ) %>%
+  setNames(c("Cancer type",	"Model type", "Min test ROC AUC",	"SD test ROC AUC",	"Median test ROC AUC",	
+             "Mean test ROC AUC", "Train-test difference ROC AUC", "Lower bound of confidence interval for mean test ROC AUC",	
+             "Upper bound of confidence interval for mean test ROC AUC", "Mean test PR AUC", 
+             "Lower bound of confidence interval for mean test PR AUC",	"Upper bound of confidence interval for mean test PR AUC",
+             "Mean test Efron pseudo-R2", "Lower bound of confidence interval for mean test Efron pseudo-R2",
+             "Upper bound of confidence interval for mean test Efron pseudo-R2"))
+
+# recall
+recall_stats <- recall_data %>%
+  mutate(lift_precision = precision / 0.01) %>%
+  group_by(cancer_type, model_type, quantile) %>%
+  summarize(
+    mean_recall = mean(recall),
+    mean_lift_recall = mean(lift_recall),
+    mean_precision = mean(precision),
+    mean_lift_precision = mean(lift_precision),
+    sd_recall = sd(recall),
+    sd_lift_recall = sd(lift_recall),
+    sd_precision = sd(precision),
+    sd_lift_precision = sd(lift_precision),
+    n_ex = n()
+  ) %>%
+  mutate(
+    ci_lower_recall = mean_recall - 1.96 * sd_recall / sqrt(n_ex),
+    ci_upper_recall = mean_recall + 1.96 * sd_recall / sqrt(n_ex),
+    
+    ci_lower_lift_recall = mean_lift_recall - 1.96 * sd_lift_recall / sqrt(n_ex),
+    ci_upper_lift_recall = mean_lift_recall + 1.96 * sd_lift_recall / sqrt(n_ex),    
+    
+    ci_lower_precision = mean_precision - 1.96 * sd_precision / sqrt(n_ex),
+    ci_upper_precision = mean_precision + 1.96 * sd_precision / sqrt(n_ex),       
+    
+    ci_lower_lift_precision = mean_lift_precision - 1.96 * sd_lift_precision / sqrt(n_ex),
+    ci_upper_lift_precision = mean_lift_precision + 1.96 * sd_lift_precision / sqrt(n_ex)
+  ) %>% 
+  filter(quantile %in% c(0.001, 0.005, 0.01,0.02,0.03, 0.040, 0.050, 0.100)) %>%
+  select(
+    cancer_type, model_type, quantile, mean_recall, mean_precision, mean_lift_recall, ci_lower_lift_recall,
+    ci_upper_lift_recall, mean_lift_precision, ci_lower_lift_precision, ci_upper_lift_precision
+    )
+
+recall_stats <- recall_stats %>%
+  select(c("quantile", "cancer_type", "model_type", "mean_recall", "mean_lift_recall", "ci_lower_lift_recall",
+           "ci_upper_lift_recall",  "mean_precision","mean_lift_precision", "ci_lower_lift_precision", 
+           "ci_upper_lift_precision")) %>%
+  setNames(c("quantile", "Cancer type",		"Model type", "Mean recall",	"Mean lift of recall",
+  "Lower bound of confidence interval for mean lift of recall",	"Upper bound of confidence interval for mean  lift of recall",
+  "Mean precision",	"Mean lift of precision",	"Lower bound of confidence interval for mean lift of precision",
+  "Upper bound of confidence interval for mean  lift of precision"))
+
+rec_3 <- recall_stats[recall_stats$quantile == 0.03, ] %>% select(-quantile)
+rec_5 <- recall_stats[recall_stats$quantile == 0.05, ] %>% select(-quantile)
+
+q3 <- roc_data %>%
+  inner_join(
+    rec_3, by=c("Cancer type", "Model type")
+  )
+q5 <- roc_data %>%
+  inner_join(
+    rec_5, by=c("Cancer type", "Model type")
+  )
+
+# wb <- createWorkbook()
+# addWorksheet(wb, "q3")
+# addWorksheet(wb, "q5")
+# 
+# writeData(wb, sheet="q3", q3)
+# writeData(wb, sheet="q5", q5)
+# 
+# saveWorkbook(wb, "../../../cancer_breakpoints_hotspots_wide/paper_third/s_benchmark_classification.xlsx", overwrite = T)
+
+```
+
+
