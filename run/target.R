@@ -3,16 +3,14 @@ setwd(script_path)
 setwd("..")
 
 library(dplyr)
-library(ggplot2)
 library(reshape2)
 
 source("../cbp_data/get_intersections.R")
 
 
-
 ## UNION ALL BREAKPOINTS IN ONE FILE
 
-data_path <- "data/target/"
+data_path <- "data/target/bed/"
 
 fl <- list.files(data_path)
 all_fl <- data.frame()
@@ -30,6 +28,8 @@ df_all <- data.frame()
 for (i in 1:nrow(all_fl)){
   nm <- paste0("All_rearrangements_", all_fl[i, 'nm'], ".bed")
   df <- read.table(paste0(data_path, nm))
+  print(nm)
+  print(nrow(df))
   df$cancer_type <- all_fl[i, 'nm_common']
   df_all <- rbind.data.frame(df_all, df)
 }
@@ -38,9 +38,9 @@ df_all$chr <- as.character(df_all$chr)
 # remove Y chromosome
 df_all <- df_all[df_all$chr != "chrY", ]
 nrow(df_all)
-# 211 803
+# 380 275
 nrow(unique(df_all))
-# 209 966
+# 378 165
 df_all <- unique(df_all)
 
 df_all$chr <- gsub("chr", "", df_all$chr)

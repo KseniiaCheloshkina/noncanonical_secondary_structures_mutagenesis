@@ -43,9 +43,41 @@ g1 <- ggplot(all_data, aes(y=r_squared_test, fill=reorder(model_type, r_squared_
   xlab("")+
   ylab("Test R-squared")+
   labs(fill = "Model type")+
-  theme_light_custom()
+  theme_light()+
+  theme(
+    axis.title.x=element_blank(),
+    axis.text.x=element_blank(),
+    axis.ticks.x=element_blank(),
+    text = element_text(size = 9, family = "sans"),
+    axis.title.y = element_text(size = 10),
+    axis.text.y = element_text(hjust = 1),
+    legend.position="bottom", legend.title = element_text(size = 10),    
+    ) 
 g1
 
 # ggsave(filename = "Fig_regression_r2.tiff", plot = g1, device = "tiff", path = "../../cancer_breakpoints_hotspots_wide/paper_third/", dpi = 600, units = "in", width = 5, height = 3, scale = 2, compression = "lzw")
+```
+
+Save table
+
+```{r}
+stats <- all_data %>%
+  group_by(cancer_type, model_type) %>%
+  summarize(
+    mean_r_squared_train = mean(r_squared_train),
+    mean_rmse_train = mean(rmse_train),
+    mean_r_squared_test = mean(r_squared_test),
+    mean_rmse_test = mean(rmse_test),    
+  ) %>%
+  select(c("cancer_type", "model_type", "mean_r_squared_train", "mean_rmse_train", "mean_r_squared_test",
+           "mean_rmse_test")) %>%
+  setNames(c("Cancer type",	"Model type", "Mean train R-squared",	"Mean test RMSE",
+             "Mean test R-squared",	"Mean test RMSE"))
+
+wb <- createWorkbook()
+addWorksheet(wb, "regression_comparison")
+writeData(wb, sheet="regression_comparison", stats)
+
+saveWorkbook(wb, "../../cancer_breakpoints_hotspots_wide/paper_third/s_benchmark_regression.xlsx", overwrite = T)
 ```
 

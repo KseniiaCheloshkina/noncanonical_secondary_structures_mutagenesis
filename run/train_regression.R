@@ -51,14 +51,6 @@ tissue_spec_feats <- setdiff(names(data), c("chr","from","to", dens_cols, conser
 ss_cols <- c ("chr", "from", "to")
 features_cols <- c(conserved_features, tissue_spec_feats)
 
-# data <- get_higher_level_features(data=data, features_cols = features_cols, 
-#                                       win_len_upper = win_len_upper,
-#                                       path_to_upper_data = paste0(data_path, "dataset_",
-#                                                                   format(win_len_upper, scientific = FALSE), ".csv"))
-# 
-# high_features <- setdiff(names(data), c(features_cols, ss_cols, dens_cols))
-# features_cols <- c(features_cols, high_features)
-
 all_tissue_spec_feats <- vector()
 for (feat in features_cols){
   for (col in tissue_spec_feats){
@@ -69,7 +61,6 @@ all_conserved_feats <- setdiff(features_cols, all_tissue_spec_feats)
 
 # for storing results
 df_r2_all <- data.frame()
-
 
 # set progress bar
 n_iterations <- length(dens_cols)
