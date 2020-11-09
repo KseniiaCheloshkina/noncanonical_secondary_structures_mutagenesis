@@ -45,6 +45,58 @@ for (i in 1:length(folders_to_comp)){
 
 ```
 
+
+Define baseline
+```{r}
+map_abb_to_cancer_type <- data.frame(
+  abb = c("BRCA", "LIRI", "MALY", "OV", "PACA", "PBCA"),
+  cancer_type = c("breast", "liver", "blood", "ovary", "pancreatic", "brain")
+)
+lift_recall <- data.frame(cancer_type=c("blood", "bone", "brain", "breast", "liver", "ovary", "pancreatic",
+                                        "prostate", "skin","uterus"),
+                          value=c(1.88235294117647, 3.4108527131783, 4.08268733850129, 5.24904214559387,
+                                   3.20561941251596, 4.68710089399744, 4.96807151979566, 4.20178799489144,
+                                   2.40102171136654, 2.84802043422733)
+                          ) %>% 
+  inner_join(map_abb_to_cancer_type) %>% 
+  select(-cancer_type) %>% 
+  setNames(c("value", "cancer_type")) %>%
+  mutate(metric="Lift of recall")
+
+roc_auc <- data.frame(cancer_type=c("blood", "bone", "brain", "breast", "liver", "ovary", "pancreatic",
+                                        "prostate", "skin","uterus"),
+                          value=c(0.551604075258422, 0.606134077341174, 0.610621197660606, 0.723447610715988,
+                                  0.646271778277241, 0.679058565325913, 0.62560466624203, 0.660254262000601,
+                                  0.588171472565438, 0.604320388092916)
+                          ) %>% 
+  inner_join(map_abb_to_cancer_type) %>% 
+  select(-cancer_type) %>% 
+  setNames(c("value", "cancer_type")) %>%
+  mutate(metric="ROC AUC")
+
+pr_auc <- data.frame(cancer_type=c("blood", "bone", "brain", "breast", "liver", "ovary", "pancreatic",
+                                        "prostate", "skin","uterus"),
+                          value=c(0.014423091728036, 0.021874750855254, 0.02386948560186, 0.035273390432157,
+                                  0.02235929989524, 0.027093889264819, 0.044967191192213, 0.027756112492681,
+                                  0.016053187079025, 0.018130924874129)
+                          ) %>% 
+  inner_join(map_abb_to_cancer_type) %>% 
+  select(-cancer_type) %>% 
+  setNames(c("value", "cancer_type")) %>%
+  mutate(metric="PR AUC")
+
+mean_data <- rbind.data.frame(
+  lift_recall,
+  roc_auc
+  )
+mean_data <- rbind.data.frame(
+  mean_data, 
+  pr_auc
+  )
+
+```
+
+
 Plot all metrics
 
 ```{r}
@@ -112,7 +164,9 @@ g2 <- ggplot(pl_values, aes(y=value, fill=model_type)) +
     axis.text.y = element_text(hjust = 1),
     legend.position="bottom", legend.title = element_text(size = 10),    
     ) +
-  scale_fill_jco()
+  scale_fill_jco()+
+  geom_hline(data=mean_data, aes(yintercept=value))
+  
 g2
 # ggsave(filename = "Fig_classification_r2.tiff", plot = g2, device = "tiff", path = "../../../cancer_breakpoints_hotspots_wide/paper_third/", dpi = 600, units = "in", width = 5, height = 3, scale = 2, compression = "lzw")
 ```
